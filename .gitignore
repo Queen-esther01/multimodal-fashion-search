@@ -1,0 +1,10 @@
+apparels/
+women-images/
+images/
+
+.env
+.venv/
+
+apparels.csv
+women-apparels.csv
+styles.csv
