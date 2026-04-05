@@ -1,5 +1,8 @@
 import os
 import time
+import urllib.request
+from io import BytesIO
+
 import numpy as np
 import chromadb
 import streamlit as st
@@ -374,11 +377,52 @@ st.markdown("""
 
 
 IMAGE_DIR = "images"
+R2_URL = (os.getenv("R2_URL") or "").rstrip("/")
 TEXT_INPUT_KEY = "text_search"
 TEXT_RESULTS_KEY = "_active_text_query"
 SUGGESTION_PILLS_KEY = "sug_pills"
 LAST_SUGGESTION_KEY = "_last_suggestion"
 IMAGE_TAB_SWITCH_NONCE_KEY = "_image_tab_switch_nonce"
+
+
+def _apparels_filename(record_id: str, uri: str | None) -> str:
+    if uri:
+        base = os.path.basename(str(uri).replace("\\", "/").rstrip("/"))
+        if base and "." in base:
+            return base
+    rid = str(record_id)
+    if "." in rid:
+        return rid
+    return f"{rid}.jpg"
+
+
+def _resolve_qdrant_image_ref(point_id) -> str:
+    filename = _apparels_filename(str(point_id), None)
+    if R2_URL:
+        return f"{R2_URL}/apparels/{filename}"
+    return f"{IMAGE_DIR}/{filename}"
+
+
+def _resolve_chroma_image_ref(record_id: str, uri: str) -> str:
+    if R2_URL:
+        filename = _apparels_filename(record_id, uri)
+        return f"{R2_URL}/apparels/{filename}"
+    return uri
+
+
+def _image_ref_available(ref: str) -> bool:
+    if not ref:
+        return False
+    if ref.startswith(("http://", "https://")):
+        return True
+    return os.path.exists(ref)
+
+
+def _load_pil_rgb(ref: str) -> Image.Image:
+    if ref.startswith(("http://", "https://")):
+        with urllib.request.urlopen(ref) as resp:
+            return Image.open(BytesIO(resp.read())).convert("RGB")
+    return Image.open(ref).convert("RGB")
 
 
 # ── Chroma ──
@@ -405,7 +449,10 @@ def _normalize_chroma(results: dict) -> list[dict]:
             "id": results["ids"][0][i],
             "metadata": results["metadatas"][0][i],
             "score": max(0, (1 - results["distances"][0][i]) * 100),
-            "img_path": results["uris"][0][i],
+            "img_path": _resolve_chroma_image_ref(
+                results["ids"][0][i],
+                results["uris"][0][i],
+            ),
         }
         for i in range(len(results["ids"][0]))
     ]
@@ -453,7 +500,7 @@ def _normalize_qdrant(results) -> list[dict]:
             "id": point.id,
             "metadata": point.payload,
             "score": max(0, point.score * 100),
-            "img_path": f"{IMAGE_DIR}/{point.id}.jpg",
+            "img_path": _resolve_qdrant_image_ref(point.id),
         }
         for point in results.points
     ]
@@ -635,13 +682,13 @@ with tab_text:
                         break
                     with col:
                         item = items[idx]
-                        if os.path.exists(item["img_path"]):
+                        if _image_ref_available(item["img_path"]):
                             st.image(item["img_path"], use_container_width=True)
                         st.markdown(
                             render_result_card(item["metadata"], item["score"]),
                             unsafe_allow_html=True,
                         )
-                        if os.path.exists(item["img_path"]):
+                        if _image_ref_available(item["img_path"]):
                             if st.button("Find similar", key=f"sim_{idx}", use_container_width=True):
                                 st.session_state["_result_img_path"] = item["img_path"]
                                 st.session_state["_switch_to_image_tab"] = True
@@ -667,9 +714,9 @@ with tab_image:
         result_img_path = None
         pil_image = Image.open(uploaded_file)
         image_rgb = np.array(pil_image.convert("RGB"))
-    elif result_img_path and os.path.exists(result_img_path):
-        pil_image = Image.open(result_img_path)
-        image_rgb = np.array(pil_image.convert("RGB"))
+    elif result_img_path and _image_ref_available(result_img_path):
+        pil_image = _load_pil_rgb(result_img_path)
+        image_rgb = np.array(pil_image)
     else:
         pil_image = None
         image_rgb = None
@@ -708,7 +755,7 @@ with tab_image:
                             break
                         with col:
                             item = items[idx]
-                            if os.path.exists(item["img_path"]):
+                            if _image_ref_available(item["img_path"]):
                                 st.image(item["img_path"], use_container_width=True)
                             st.markdown(
                                 render_result_card(item["metadata"], item["score"]),

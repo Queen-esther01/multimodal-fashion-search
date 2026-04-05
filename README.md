@@ -61,6 +61,10 @@ The current app expects these values in `.env`:
 - `CHROMA_TENANT`
 - `CHROMA_DATABASE`
 
+Optional image hosting (Cloudflare R2 public bucket or custom domain):
+
+- `R2_URL` — base URL with **no** trailing slash (for example `https://pub-xxx.r2.dev`). When set, result images are loaded from `{R2_URL}/apparels/<filename>`, where `<filename>` is derived from the vector DB (for example `1163.jpg` from a Qdrant point id `1163`, or the basename of a Chroma URI). If unset, Qdrant results use local files under `images/<id>.jpg` and Chroma keeps the stored URI.
+
 Also present in the local `.env`, but not currently required by `main.py`:
 
 - `CHROMA_HOST`
