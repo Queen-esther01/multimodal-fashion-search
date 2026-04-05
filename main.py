@@ -1,8 +1,10 @@
 import os
+import ssl
 import time
 import urllib.request
 from io import BytesIO
 
+import certifi
 import numpy as np
 import chromadb
 import streamlit as st
@@ -420,7 +422,12 @@ def _image_ref_available(ref: str) -> bool:
 
 def _load_pil_rgb(ref: str) -> Image.Image:
     if ref.startswith(("http://", "https://")):
-        with urllib.request.urlopen(ref) as resp:
+        request = urllib.request.Request(
+            ref,
+            headers={"User-Agent": "streamlit-image-search/1.0"},
+        )
+        ssl_context = ssl.create_default_context(cafile=certifi.where())
+        with urllib.request.urlopen(request, context=ssl_context, timeout=20) as resp:
             return Image.open(BytesIO(resp.read())).convert("RGB")
     return Image.open(ref).convert("RGB")
 

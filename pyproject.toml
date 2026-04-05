@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.13"
 dependencies = [
+    "certifi",
     "chromadb>=1.5.5",
     "inference-sdk>=0.12.0",
     "matplotlib>=3.10.8",
